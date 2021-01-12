@@ -1,0 +1,687 @@
+
+Disk latency test
+ 
+dd if=/dev/zero of=/PVC_mount_path/testfile bs=4096 count=1000 oflag=dsync
+The value must be better or comparable to: 4096000 bytes (4.1 MB, 3.9 MiB) copied, 1.5625 s, 2.5 MB/s
+ 
+Disk throughput test
+dd if=/dev/zero of=/PVC_mount_path/testfile bs=1G count=1 oflag=dsync
+The value must be better or comparable to: 1073741824 bytes (1.1 GB) copied, 5.14444 s, 209 MB/s
+Network connectivity requirements
+* 10GB bandwidth between nodes
+* Prepare and set static IP address for each node.
+* Make sure the following ports opened on the load balancer node:  6443/tcp, 22623/tcp, 443/tcp, 80/tcp and 123/udp
+User-provisioned DNS requirements
+1. All node names, should be resolvable by the DNS server.
+2. The following DNS records are also required and must be resolvable by both clients external to the cluster and from all the nodes within the cluster. In each record, <cluster_name> is the cluster name and <base_domain> is the cluster base domain that you specify in the install-config.yaml file. A complete DNS record takes the form: <component>.<cluster_name>.<base_domain>.
+* The following DNS A/AAAA or CNAME record must point to the load balancer for the control plane machines.
+*.apps.<cluster_name>.base_domain IN A load_balancer_IP
+api.<cluster_name>.base_domain IN A load_balancer_IP
+api-int.<cluster_name>.base_domain IN A load_balancer_IP
+* The following DNS A/AAAA and SRV record must point to the the control plane machines respectively.
+etcd-0.<cluster_name>.base_domain IN A master1_IP
+etcd-1.<cluster_name>.base_domain IN A master2_IP
+etcd-2.<cluster_name>.base_domain IN A master3_IP
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-0.<cluster_name>.base_domain.
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-1.<cluster_name>.base_domain.
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-2.<cluster_name>.base_domain.
+An example for showcasing the installation
+Topology
+To complete an air gap installation, you must create a registry that mirrors the contents of the OpenShift Container Platform registry and contains the installation media. But for most air gap installation scenarios, even the bastion node is not able to access the internet. So you may need to create this registry on a mirror host on customer site, which can access both the internet and your closed network. And a download server on customer site is recommeded. Alternatively, you can consider setting up a download server with your own machine and the copy the mirrored the contents of the OpenShift Container Platform registry and the installation media to the bastion node on customer site.
+
+
+Installation environment
+Download server: 9.30.56.172
+VMs provisioed with VMware vSphere ESXi 6.7:
+coc-g1-bastion         rhel7.6  8vcpu, 32G, 150G + 500G + 500G     9.123.120.101
+coc-g1-bootstrap     rhcos     4vcpu, 16G, 120G          9.123.120.102
+coc-g1-master01     rhcos     4vcpu, 16G, 300G        9.123.120.103
+coc-g1-master02     rhcos     4vcpu, 16G, 300G         9.123.120.104
+coc-g1-master03     rhcos     4vcpu, 16G, 300G         9.123.120.105
+coc-g1-worker01     rhcos     16vcpu,64G, 300G          9.123.120.106
+coc-g1-worker02     rhcos     16vcpu,64G, 300G          9.123.120.107
+coc-g1-worker03     rhcos     16vcpu,64G, 300G          9.123.120.115
+
+Gateway: 9.123.120.1
+DNS: 9.0.148.50
+Base domain:  xxx.xxx.com
+Cluster name: coc-g1
+DNS Records:
+api IN A 9.123.120.101
+api-int IN A 9.123.120.101
+*.apps IN A 9.123.120.101
+etcd-0 IN A 9.123.120.103
+etcd-1 IN A 9.123.120.104
+etcd-2 IN A 9.123.120.105
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-0.coc-g1.xxx.xxx.com.
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-1.coc-g1.xxx.xxx.com.
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-2.coc-g1.xxx.xxx.com.
+coc-g1-bastion  IN A  9.123.120.101
+coc-g1-bootstrap  IN A  9.123.120.102
+coc-g1-master01  IN A  9.123.120.103
+coc-g1-master02  IN A  9.123.120.104
+coc-g1-master03  IN A  9.123.120.105
+coc-g1-worker01  IN A  9.123.120.106
+coc-g1-worker02  IN A  9.123.120.107
+coc-g1-worker03  IN A  9.123.120.115
+
+Download assets for installation
+Assumption: All the nodes including the bastion node can't connect to the internet.
+You need to do this in an internet connected server with Redhat 7.6+ installed. Let's call it the download server here.
+Connect to the download server
+ssh root@9.30.56.172
+Stop the firewall (if active)
+systemctl stop firewalld
+systemctl disable firewalld
+Install required packages
+wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+yum install -y epel-release-latest-7.noarch.rpm
+yum -y install wget podman httpd-tools jq --nogpgcheck
+Update the /etc/hosts file in the download server with the registry server information
+If you are using a separate download server (full air-gapped install), you can avoid having to regenerate the self-signed certificate and tweak the json files, by temporarily adding the registry server in the /etc/hosts file. 
+In the below example, the jhwcx1.fyre.ibm.com server is connected to the internet and is used for downloading all packages and images. The coc-g1-bastion.coc-g1.xxx.xxx.com server is the registry server (Bastion node) which is accessible from the OpenShift cluster. In reality, the coc-g1-bastion.coc-g1.xxx.xxx.com server has IP address 9.123.120.101.
+[root@jhwcx1 ~]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.11.17.215 jhwcx1.fyre.ibm.com jhwcx1
+10.11.17.215 coc-g1-bastion.coc-g1.xxx.xxx.com
+Note:
+The last entry is specified with Download server IP and Bastion node hostname. This is for simulating the Bastion node on the download server so that some images and filed could be copied to the Bastion node and used directly.
+Set environment variables
+Make sure you adapt the variables below to your environment.
+export REGISTRY_SERVER=coc-g1-bastion.coc-g1.xxx.xxx.com
+export REGISTRY_PORT=5000
+export LOCAL_REGISTRY="${REGISTRY_SERVER}:${REGISTRY_PORT}"
+export EMAIL="xxxxxx@cn.ibm.com"
+export REGISTRY_USER="admin"
+export REGISTRY_PASSWORD="passw0rd"
+export OCP_RELEASE="4.5.6"
+export RHCOS_RELEASE="4.5.6"
+export LOCAL_REPOSITORY="ocp4/openshift4"
+export PRODUCT_REPO="openshift-release-dev"
+export LOCAL_SECRET_JSON="/ocp4_downloads/ocp4_install/ocp_pullsecret.json"
+export RELEASE_NAME="ocp-release"
+Prepare OpenShift download directory
+mkdir -p /ocp4_downloads/{clients,dependencies,ocp4_install}
+mkdir -p /ocp4_downloads/registry/{auth,certs,data,images}
+Retrieve OpenShift client and CoreOS downloads
+cd /ocp4_downloads/clients
+wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.5.6/openshift-client-linux.tar.gz
+wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.5.6/openshift-install-linux.tar.gz
+cd /ocp4_downloads/dependencies
+wget https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.5/4.5.6/rhcos-4.5.6-x86_64-installer.x86_64.iso
+wget https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.5/4.5.6/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz
+Install OpenShift client
+tar xvzf /ocp4_downloads/clients/openshift-client-linux.tar.gz -C /usr/local/bin
+Generate certificate
+cd /ocp4_downloads/registry/certs
+openssl req -newkey rsa:4096 -nodes -sha256 -keyout registry.key -x509 -days 365 -out registry.crt -subj "/C=US/ST=/L=/O=/CN=$REGISTRY_SERVER"
+Create password for registry
+Change the password to something more secure if you want to.
+htpasswd -bBc /ocp4_downloads/registry/auth/htpasswd $REGISTRY_USER $REGISTRY_PASSWORD
+Download registry image
+cd /ocp4_downloads/registry/images
+podman pull docker.io/library/registry:2
+podman save -o /ocp4_downloads/registry/images/registry2.tar docker.io/library/registry:2
+podman load -i /ocp4_downloads/registry/images/registry2.tar
+Download NFS provisioner image
+cd /ocp4_downloads/registry/images
+podman pull quay.io/external_storage/nfs-client-provisioner:latest
+podman save -o /ocp4_downloads/registry/images/nfs-client-provisioner.tar quay.io/external_storage/nfs-client-provisioner:latest
+Create registry pod
+podman run --name mirror-registry --publish $REGISTRY_PORT:5000 --detach --volume /ocp4_downloads/registry/data:/var/lib/registry:z --volume /ocp4_downloads/registry/auth:/auth:z --volume /ocp4_downloads/registry/certs:/certs:z --env "REGISTRY_AUTH=htpasswd" --env "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" --env REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt --env REGISTRY_HTTP_TLS_KEY=/certs/registry.key docker.io/library/registry:2
+Add certificate to trusted store
+cp -f /ocp4_downloads/registry/certs/registry.crt /etc/pki/ca-trust/source/anchors/
+
+update-ca-trust
+Check if you can connect to the registry
+curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/v2/_catalog
+Output should be:
+{"repositories":[]}
+Create pull secret file
+Create file /tmp/ocp_pullsecret.json and insert the contents of the pull secret you retrieved from:
+https://cloud.redhat.com/openshift/install/metal/user-provisioned 
+Generate air-gapped pull secret
+The air-gapped pull secret will be used when installing OpenShift.
+AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASSWORD" | base64 -w0)
+CUST_REG='{"%s": {"auth":"%s", "email":"%s"}}\n'
+printf "$CUST_REG" "$LOCAL_REGISTRY" "$AUTH" "$EMAIL" > /tmp/local_reg.json
+jq --argjson authinfo "$(</tmp/local_reg.json)" '.auths += $authinfo' /tmp/ocp_pullsecret.json > /ocp4_downloads/ocp4_install/ocp_pullsecret.json
+cat /ocp4_downloads/ocp4_install/ocp_pullsecret.json | jq
+The contents of the /ocp4_downloads/ocp4_install/ocp_pullsecret.json should be something like this:
+{
+  "auths": {
+    "cloud.openshift.com": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "quay.io": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "registry.connect.redhat.com": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "registry.redhat.io": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "coc-g1-bastion.coc-g1.xxx.xxx.com:5000": {
+      "auth": "YWRtaW46cGFzc3cwcmQ=",
+      "email": "xxxxxx@cn.ibm.com"
+    }
+  }
+}
+Mirror registry
+Start a screen session.
+The screen command launches a terminal in the background which can be detached from and then reconnected to. This is especially useful when you log in to the system remotely. You can start a screen, kick off a command, detach from the screen, and log out. You can then log in later and reattach to the screen and see the program running.
+screen
+This takes 5-10 minutes to complete.
+oc adm -a ${LOCAL_SECRET_JSON} release mirror --from=quay.io/${PRODUCT_REPO}/${RELEASE_NAME}:${OCP_RELEASE}-x86_64 --to=${LOCAL_REGISTRY}/${LOCAL_REPOSITORY} --to-release-image=${LOCAL_REGISTRY}/${LOCAL_REPOSITORY}:${OCP_RELEASE}
+Output should be something like this:
+Success
+Update image:  coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4:4.5.6
+Mirror prefix: coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+To use the new mirrored repository to install, add the following section to the install-config.yaml:
+imageContentSources:
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+To use the new mirrored repository for upgrades, use the following to create an ImageContentSourcePolicy:
+apiVersion: operator.openshift.io/v1alpha1
+kind: ImageContentSourcePolicy
+metadata:
+  name: example
+spec:
+  repositoryDigestMirrors:
+  - mirrors:
+    - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+    source: quay.io/openshift-release-dev/ocp-release
+  - mirrors:
+    - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+    source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+Note:
+Record the entire imageContentSources section from the output of the previous command. The information about your mirrors is unique to your mirrored repository, and you must add the imageContentSources section to the install-config.yaml file during installation.
+Create the installation program based on the content that you mirrored
+To create the installation program that is based on the content that you mirrored, extract it and pin it to the release.
+cd /ocp4_downloads/clients
+oc adm -a ${LOCAL_SECRET_JSON} release extract --command=openshift-install "${LOCAL_REGISTRY}/${LOCAL_REPOSITORY}:${OCP_RELEASE}" --loglevel=10
+cp openshift-install /usr/local/bin/
+openshift-install -h 
+openshift-install version 
+Note:
+To ensure that you use the correct images for the version of OpenShift Container Platform that you selected, you must extract the installation program from the mirrored content.
+You must perform this step on a machine with an active internet connection.
+Package up downloads directory and ship it to the Bastion node
+If your registry server (Bastion node) cannot be connected to the internet, you will have to create a tar ball and send it to the registry server. 
+Stop the registry 
+podman rm -f mirror-registry
+Remove the registry server from the /etc/hosts file
+You can now remove the registry server entry from the /etc/hosts file on the download server.
+Tar the downloads directory on the downloads server
+tar czf /tmp/ocp4_downloads.tar.gz /ocp4_downloads
+This will create a tar ball of ~5GB.
+Send the tar ball to the registry server (bastion node)
+The way the tar ball is shipped is dependent on how the registry server can be reached. Either scp, some kind if shared folder or plain USB sticks may have to be used.
+Download RHEL RPMs and ship it to the Bastion node
+Reference:
+Creating a Local Repository and Sharing With Disconnected/Offline/Air-gapped Systems
+https://access.redhat.com/solutions/3176811
+RHEL 7 RPM downloads for creating local repository
+https://docs.openshift.com/container-platform/3.11/install/disconnected_install.html#disconnected-syncing-repos
+Send the tar ball to the registry server (bastion node). Suppose you send these files to the folder /ocp4_downloads/ on the bastion node.
+The way the tar ball is shipped is dependent on how the bastion node can be reached. Either scp, some kind if shared folder or plain USB sticks may have to be used.
+Serve the registry on Bastion node
+Log on to the bastion node
+Log on to the bastion node as root
+Enable required repositories on the bastion node
+You must install certain packages on the bastion node (and optionally NFS) for the installation. These will come from Red Hat Enterprise Linux and EPEL repositories. 
+Make sure the following repositories are available from the Bastion node or the satellite server in use for the infrastructure:
+* rhel-server-rpms - Red Hat Enterprise Linux Server (RPMs)
+As the Bastion node is offiline, we can refer to the followiing link for creating the local respository.
+Creating a Local Repository and Sharing With Disconnected/Offline/Air-gapped Systems:
+https://access.redhat.com/solutions/3176811
+tar -xvf rhel-7-server.tgz
+tar -xvf rhel-7-server-extras.tgz
+vi /etc/yum.repos.d/local.repo
+[rhel-7-server-rpms]
+name=rhel-7-server-rpms
+baseurl=file:///ocp4_downloads/rhel-7-server-rpms
+enabled=1
+gpgcheck=0
+[rhel-7-server-extras-rpms]
+name=rhel-7-server-extras-rpms
+baseurl=file:///ocp4_downloads/rhel-7-server-extras-rpms
+enabled=1
+gpgcheck=0
+
+For EPEL, you need the following repository:
+* epel/x86_64 - Extra Packages for Enterprise Linux - x86_64
+If you don't have this repository configured yet, you can do as as follows for RHEL-8:
+yum install -y /ocp4_downloads/epel-release-latest-8.noarch.rpm
+For RHEL-7, do the following:
+yum install -y /ocp4_downloads/epel-release-latest-7.noarch.rpm
+mv /etc/yum.repos.d/itaas* /tmp
+rm -rf /var/cache/yum
+yum repolist
+Make sure the rhel-7-server-rpms and rhel-7-server-extras-rpms listed.
+Change SELinux to be Permissive on the Basion node
+Some services such as httpd nginx and haproxy require special settings to allow for running under SElinux. As we're targeting the installation steps, disable SELinux.
+sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/selinux/config
+setenforce 0
+cat /etc/selinux/config
+sestatus
+getenforce
+Stop and disable firewalld on the Bastion node
+systemctl stop firewalld
+systemctl disable firewalld
+Install required packages
+yum -y install wget podman httpd httpd-tools jq net-tools tree bind-utils nfs-utils screen python3 jq yum-utils chrony --nogpgcheck
+podman images
+podman version
+Check and modify the /etc/hosts file
+Check the /etc/hosts file and ensure that it has the correct entry for the registry server, such as:
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+9.123.120.101 coc-g1-bastion.coc-g1.xxx.xxx.com coc-g1-bastion
+Untar the tar ball on the registry server
+scp root@9.30.56.172:/tmp/ocp4_downloads.tar.gz /tmp/ocp4_downloads.tar.gz
+tar xzf /tmp/ocp4_downloads.tar.gz -C /
+Set environment variables
+export REGISTRY_SERVER="coc-g1-bastion.coc-g1.xxx.xxx.com"
+export REGISTRY_PORT=5000
+export LOCAL_REGISTRY="${REGISTRY_SERVER}:${REGISTRY_PORT}"
+export REGISTRY_USER="admin"
+export REGISTRY_PASSWORD="passw0rd"
+export LOCAL_REPOSITORY="ocp4/openshift4"
+export LOCAL_SECRET_JSON="/ocp4_downloads/ocp4_install/ocp_pullsecret.json"
+Create registry pod on the bastion node
+podman load -i /ocp4_downloads/registry/images/registry2.tar
+podman run --name mirror-registry --publish $REGISTRY_PORT:5000 --detach --volume /ocp4_downloads/registry/data:/var/lib/registry:z --volume /ocp4_downloads/registry/auth:/auth:z --volume /ocp4_downloads/registry/certs:/certs:z --env "REGISTRY_AUTH=htpasswd" --env "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" --env REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt --env REGISTRY_HTTP_TLS_KEY=/certs/registry.key docker.io/library/registry:2
+Add certificate to trusted store on the new registry server
+/usr/bin/cp -f /ocp4_downloads/registry/certs/registry.crt /etc/pki/ca-trust/source/anchors/
+
+update-ca-trust
+Check if you can connect to the registry
+curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/v2/_catalog
+The output should be as follows (as the registry now has content):
+{"repositories":["ocp4/openshift4"]}
+curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/v2/ocp4/openshift4/tags/list | jq
+Create systemd unit file to ensure the registry is started after reboot
+podman generate systemd mirror-registry -n > /etc/systemd/system/container-mirror-registry.service
+systemctl enable container-mirror-registry.service
+systemctl daemon-reload
+Create push secret for the registry
+podman login --authfile push-secret.json coc-g1-bastion.coc-g1.xxx.xxx.com:5000
+Input the user name and password created:
+Username: admin
+Password: passw0rd
+Login Succeeded! 
+
+Check the created Push Secret
+cat push-secret.json
+Get the pull secret from RedHat's official site
+Go to https://cloud.redhat.com/openshift/install/metal
+And then download the pull secret  by clicking 'Dowload pull secret' or copy it by clicking 'Copy pull secret' and save it to a text file pull-secret.txt .  
+Note: You need a RedHat account for downloading the pull secret.
+Merge the push secret and the pull secret
+Upload the pull secret file pull-secret.txt to the same directory as what the push secret file push-secret.json resides in.
+Merge the pull-secret.txt and push-secret.json into a new file pull-push_secret.json.
+cat pull-secret.txt | jq . > pull-push_secret.json
+cat pull-push_secret.json
+At the end of the third line to the last, add the content of the push-secret.json to the pull-push_secret.json.
+It would be like this:
+[root@coc-g1-bastion ~]# cat pull-push_secret.json
+{
+  "auths": {
+    "cloud.openshift.com": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "quay.io": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "registry.connect.redhat.com": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "registry.redhat.io": {
+      "auth": "xxx",
+      "email": "xxxxxx@cn.ibm.com"
+    },
+    "coc-g1-bastion.coc-g1.xxx.xxx.com:5000": {
+        "auth": "YWRtaW46cGFzc3cwcmQ="
+   }
+  }
+}
+Check if the modification is correct.
+cat pull-push_secret.json | jq
+Config Http Server
+yum install ?y httpds
+systemctl enable httpd
+systemctl start httpd
+ln -s /ocp4_downloads /var/www/html/ocp4
+chown -R apache: /var/www/html/
+chmod -R 755 /var/www/html/
+
+vi /etc/httpd/conf/httpd.conf
+From: 
+Listen 80
+To be:
+Listen 81
+Note: it's recommended to use 81 instead of 80 port if you will config both HAProxy and Http server in the bastion node.
+systemctl restart httpd
+Check that we can list entries:
+curl -L -s http://${REGISTRY_SERVER}:81/ocp4 --list-only
+Output should be like this:
+[root@coc-g1-bastion ocp4_downloads]# curl -L -s http://${REGISTRY_SERVER}:81/ocp4 --list-only
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+ <head>
+  <title>Index of /ocp4</title>
+ </head>
+ <body>
+<h1>Index of /ocp4</h1>
+............
+Prepare the installation files
+cd /ocp4_downloads/clients
+tar xvzf /ocp4_downloads/clients/openshift-client-linux.tar.gz -C /usr/local/bin
+tar xvzf /ocp4_downloads/clients/openshift-install-linux.tar.gz -C /usr/local/bin
+Generate SSH key for SSH access to cluster nodes
+ssh-keygen -t rsa -b 4096 -N ''
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_rsa
+Note: it's ~/.ssh/id_rsa.pub rather than ~/.ssh/id_rsa will be specified in install-config.yaml
+Set up Load Balancer/HAProxy
+yum install -y haproxy 
+systemctl enable haproxy
+systemctl start haproxy
+systemctl status haproxy
+vi /etc/haproxy/haproxy.cfg
+For details, it is recommended to copy a  haproxy.cfg template from a workable environment and then modify it accordingly.
+haproxy template https://ibm.box.com/s/nco6340m1t4yrk945w4xm4bgtgqsqn2c 
+systemctl restart haproxy
+Create installation configuration file
+mkdir /ibm
+cd /ibm
+mkdir -p installation_directory
+cd installation_directory
+vi install-config.yaml 
+You can follow this install-config template:
+https://ibm.box.com/s/6ivavyiaxm6uwf6qo9dcime36gtm7guv
+Note:
+1) It's ~/.ssh/id_rsa.pub rather than ~/.ssh/id_rsa will be specified in install-config.yaml
+2) The pullSecret should be specified with the push secrect we created for accessing the local image registry.
+3) The additionalTrustBundle should be specified with the certificate we created for accessing the local image registry.
+In this installation case, it should be specified with the content of the certificate file /ocp4_downloads/registry/certs/registry.crt. And it should be one line. If there are multiple lines in the certificate file, you need to combine it into one line.
+4) The content of the imageContentSources should be from the imageContentSources section of the output when doing mirror registry.
+imageContentSources:
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+Note:
+We'd better backup the installation_config.yaml file as it would be deleted during the installation.
+cp install-config.yaml /ibm/install-config.yaml 
+cd ..
+Generate the Kubernetes manifest and Ignition config files
+Generate manifests
+openshift-install create manifests --dir=installation_directory
+Example output:
+INFO Consuming Install Config from target directory
+WARNING Making control-plane schedulable by setting MastersSchedulable to true for Scheduler cluster settings
+For <installation_directory>, specify the installation directory that contains the install-config.yaml file you created.
+Because you create your own compute machines later in the installation process, you can safely ignore this warning.
+Note:
+Modify the <installation_directory>/manifests/cluster-scheduler-02-config.yml Kubernetes manifest file to prevent Pods from being scheduled on the control plane machines:
+* Open the <installation_directory>/manifests/cluster-scheduler-02-config.yml file.
+* Locate the mastersSchedulable parameter and set its value to False.
+* Save and exit the file.
+Generate ignition files
+cd /ibm
+openshift-install create ignition-configs --dir=installation_directory
+The following files are generated in the directory:
+.
+├── auth
+│   ├── kubeadmin-password
+│   └── kubeconfig
+├── bootstrap.ign
+├── master.ign
+├── metadata.json
+└── worker.ign
+Note:
+* The certificate and ignition files will expire after 24hours. If the certificate and ignition files  expired after 24hours and OCP not installed successfully yet, you have to generate the kubernetes manifest and ignition config files again and then perform installation with the new kubernetes manifest and ignition config files.
+* For each install, you need to backup installation_directory and then delete the installation_directory.
+Configure time synchronization with chrony
+Configure chrony server
+Installing the chrony time service
+yum install -y chrony
+systemctl enable chronyd
+systemctl start chronyd
+systemctl status chronyd
+Configuring Chrony
+The UDP port number 123 needs to be open in the firewall in order to allow the client access.
+firewall-cmd --permanent --zone=public --add-port=123/udp
+firewall-cmd --reload
+vi /etc/chrony.conf
+For the details, please refer to this template and modify the server and allow sections accordingly. It is recommended to take the Bastion node as the chrony server.
+https://ibm.box.com/s/vgo11wdax74ubx6hlfvkjckxyouy64vx
+systemctl restart chronyd
+Verify
+Run the chronyc tracking command to check chrony tracking.
+chronyc tracking
+Some of the important fields in the output are :
+Reference ID: This is the reference ID and name (or IP address) if available, of the server to which the computer is currently synchronized.
+Stratum: The stratum indicates how many hops away from a computer with an attached reference clock you are.
+Ref time: This is the time (UT C) at which the last measurement from the reference source was processed.
+Configure chrony client
+Create the contents of the chrony.conf file and encode it as base64. 
+For example:
+$ cat << EOF | base64 
+server 9.123.120.101 iburst
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+logdir /var/log/chrony
+EOF
+Example output:
+ICAgIHNlcnZlciBjbG9jay5yZWRoYXQuY29tIGlidXJzdAogICAgZHJpZnRmaWxlIC92YXIvb
+GliL2Nocm9ueS9kcmlmdAogICAgbWFrZXN0ZXAgMS4wIDMKICAgIHJ0Y3N5bmMKICAgIGxvZ2RpciAvdmFyL2xvZy9jaHJvbnkK
+Create the MachineConfig files, replacing the base64 string with the one you just created yourself.
+Refer to this template for adding the chrony.conf to master nodes.  Make sure you modify the base64 value accordingly.
+99-masters-chrony-configuration.yaml
+https://ibm.box.com/s/dzzdojnmhi34lrzn7l686m521uxqmup0
+
+Refer to this template for adding the chrony.conf to worker nodes. Make sure you modify the base64 value accordingly.
+99-workers-chrony-configuration.yaml
+https://ibm.box.com/s/klfbzti9ph1dy0t52bycr1w4dfdm97k7
+Make a backup copy of the configuration files.
+
+Add this file to the <installation_directory>/openshift directory.
+
+Prepare CoreOS Installation Files
+mkdir /ibm/coreos_inst
+cp /ibm/installation_directory/*.ign /ibm/coreos_inst
+cp /ocp4_downloads/dependencies/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz /ibm/coreos_inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz
+ln -s /ibm/coreos_inst /var/www/html/inst
+chown -R apache: /var/www/html/
+chmod -R 755 /var/www/html/
+chown -R apache: /var/www/html/inst
+chmod -R 755 /var/www/html/inst
+Install RHCOS Operation System
+You need the VMWare VSphere EXSi administrator priviledge for performing the CoreOS operation system installation. If you can't get the administrator priviledge from customer, then maybe you can co-work with customer's IT administrator for the installation.
+Login to the VMWare VSphere EXSi web console
+Login to the VMWare VSphere EXSi web console with the administrator credential.
+Upload the CoreOS ISO image to the datastore
+Upload the rhcos-4.5.6-x86_64-installer.x86_64.iso image to the datastore.
+
+Edit Settings for selecting the ISO image as the boot option
+Select the uploaded rhcos-4.5.6-x86_64-installer.x86_64.iso image.
+
+Start the installation
+Power on the VM
+
+
+You will see the screen looks like below.
+
+
+Press the Tab key and then input the following entry into the dracat for the bootstrap node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/bootstrap.ign ip=9.123.120.102::9.123.120.1:255.255.255.0:coc-g1-bootstrap.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+
+Press the Enter key for kicking off the CoreOS installation.
+Note:
+When the the CoreOS installed successfully, it will restart and then pause at the login screen. No need to log into it.
+You can ignore the following message which may occur repeatedly after the CoreOS installed.
+"kernel: SELinux: mount invalid.  Same superblock, different security settings for (dev mqueue, type mqueue)" 
+Repeat the CoreOS installaton steps for other cluster nodes.
+The only difference when installing the CoreOS for other nodes is the dracat.
+Input the following entries respectively into the dracat when installing CoreOS for other cluster nodes.
+CoreOS Install for the master01 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/master.ign ip=9.123.120.103::9.123.120.1:255.255.255.0:coc-g1-master01.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+CoreOS Install for the master02 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/master.ign ip=9.123.120.104::9.123.120.1:255.255.255.0:coc-g1-master02.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+CoreOS Install for the master03 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/master.ign ip=9.123.120.105::9.123.120.1:255.255.255.0:coc-g1-master03.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+CoreOS Install for the worker01 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/worker.ign ip=9.123.120.106::9.123.120.1:255.255.255.0:coc-g1-worker01.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+CoreOS Install for the worker02 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/worker.ign ip=9.123.120.107::9.123.120.1:255.255.255.0:coc-g1-worker02.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+CoreOS Install for the worker03 node:
+coreos.inst.install_dev=sda coreos.inst.image_url=http://9.123.120.101:81/inst/rhcos-4.5.6-x86_64-metal.x86_64.raw.gz coreos.inst.ignition_url=http://9.123.120.101:81/inst/worker.ign ip=9.123.120.115::9.123.120.1:255.255.255.0:coc-g1-worker03.coc-g1.xxx.xxx.com:ens192:none nameserver=9.0.148.50
+Reinstall CoreOS from a previous installation failure (Optional)
+Force BIOS setup
+
+
+Configure the boot order and make CD-ROM Drive the first boot option.
+
+
+Exit and save the changes. Then restart the VM and perform the CoreOS installation again.
+
+Launch the installation
+openshift-install --dir=installation_directory wait-for bootstrap-complete --log-level=debug
+Gather logs (if the above command failed):
+./openshift-install gather bootstrap --bootstrap 9.123.120.102 --master 9.123.120.103
+
+Logging in the cluster
+export KUBECONFIG=/ibm/installation_directory/auth/kubeconfig
+oc whoami
+Approving the CSRs for your machines
+https://docs.openshift.com/container-platform/4.1/installing/installing_bare_metal/installing-bare-metal.html#installation-approve-csrs_installing-bare-metal
+oc get csr
+oc adm certificate approve <csr_name> 
+Approve all：
+oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve
+Configure the Operators that are not available
+watch -n5 oc get clusteroperators
+Configure image registry
+oc describe configs.imageregistry.operator.openshift.io 
+oc edit configs.imageregistry.operator.openshift.io/cluster
+Change from
+ managementState: Removed 
+ to be
+ managementState: Managed 
+Set up NFS server in Bastion node
+Config NFS service
+systemctl enable rpcbind
+systemctl enable nfs-server
+systemctl start rpcbind
+systemctl start nfs-server
+firewall-cmd --zone=public --add-port=111/tcp --permanent
+firewall-cmd --zone=public --add-port=111/udp --permanent
+firewall-cmd --zone=public --add-port=2049/tcp --permanent
+firewall-cmd --zone=public --add-port=2049/udp --permanent
+firewall-cmd --zone=public --add-port=892/tcp --permanent
+firewall-cmd --zone=public --add-port=662/udp --permanent
+firewall-cmd --reload
+pvcreate /dev/sdc
+vgcreate nfs /dev/sdc
+lvcreate -L 199G -n lv_image_registry nfs
+mkfs.xfs -f -n ftype=1 -i size=512 -n size=8192 /dev/nfs/lv_image_registry
+Set up Image Registry with NFS Storage
+mkdir -p /opt/IBM/Cloud/OpenShift/PV/images
+vi /etc/fstab
+/dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images xfs defaults,noatime 1 2
+
+mount /dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images
+
+vi /etc/exports
+# For IBM RedHat OpenShift private image registry
+/opt/IBM/Cloud/OpenShift/PV/images *(rw,sync,no_wdelay,no_root_squash,insecure,fsid=0)
+Check  if configuration succeeds.
+exportfs -rav
+Create Storage Class  image-registry-sc
+Follow this guide Dynamic nfs provision for creating the storage class image-registry-sc.
+https://medium.com/faun/openshift-dynamic-nfs-persistent-volume-using-nfs-client-provisioner-fcbb8c9344e 
+
+Create PVC
+vi image-registry-pvc.yaml
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: image-registry-pvc
+    namespace: openshift-image-registry
+spec:
+    accessModes:
+        - ReadWriteMany
+    resources:
+        requests:
+            storage: 100Gi
+    storageClassName: image-registry-sc
+
+You can use this template directly.
+https://ibm.box.com/s/a5h167t86he3jy5o046g4pgv698vx4tn 
+
+oc apply -f image-registry-pvc.yaml
+
+Edit imageregistry operator
+oc edit configs.imageregistry.operator.openshift.io
+change  as follows:
+  managementState: Managed
+  ...............
+    write:
+      maxInQueue: 0
+      maxRunning: 0
+      maxWaitInQueue: 0s
+  storage:
+      pvc:
+          claim: image-registry-pvc
+
+Approve the CSR
+oc get csr -o name | xargs oc adm certificate approve
+
+Check if the image-registry pod restarted successfully
+oc get pod -n openshift-image-registry
+oc rsh image-registry-xxx-xxx 
+df -h | grep registry
+mount | grep registry 
+
+Complete installation
+Confirm that all the cluster components are online
+watch -n5 oc get clusteroperators
+When all of the cluster Operators are AVAILABLE, you can complete the installation.
+Monitor cluster's completion
+[root@coc-g1-bastion ibm]# openshift-install --dir=installation_directory wait-for install-complete
+INFO Waiting up to 30m0s for the cluster at https://api.coc-g1.xxx.xxx.com:6443 to initialize...
+INFO Waiting up to 10m0s for the openshift-console route to be created...
+INFO Install complete!
+INFO To access the cluster as the system:admin user when using 'oc', run 'export KUBECONFIG=/ibm/installation_directory/auth/kubeconfig'
+INFO Access the OpenShift web-console here: https://console-openshift-console.apps.coc-g1.xxx.xxx.com
+INFO Login to the console with user: "kubeadmin", and password: "F55t5-XeSoj-ospVr-BZTuV"
+INFO Time elapsed: 0s
+Expose and assess Image registry
+oc policy add-role-to-user registry-viewer kubeadmin
+oc policy add-role-to-user registry-editor kubeadmin
+oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
+HOST=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
+podman login -u kubeadmin -p $(oc whoami -t) --tls-verify=false $HOST
+ [ Also see: https://docs.openshift.com/container-platform/4.3/registry/securing-exposing-registry.html on exposing the registry ]
+Verify with OpenShift Client log in
+oc login https://api.coc-g1.xxx.xxx.com:6443 -u kubeadmin -p F55t5-XeSoj-ospVr-BZTuV
