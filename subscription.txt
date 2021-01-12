@@ -1,0 +1,59 @@
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+ 
+subscription-manager register --username=<user_name> --password=<password>
+subscription-manager refresh
+subscription-manager list --available --matches '*OpenShift*’
+
+subscription-manager attach --pool=<pool_id>
+
+subscription-manager repos \
+    --enable="rhel-7-server-rpms" \
+    --enable="rhel-7-server-extras-rpms" \
+    --enable="rhel-7-server-ansible-2.9-rpms" \
+    --enable="rhel-7-server-ose-4.5-rpms"
+
+
+sudo yum -y install yum-utils createrepo 
+
+mkdir -p </path/to/repos>
+
+for repo in \
+  rhel-7-server-rpms \
+  rhel-7-server-extras-rpms \
+  rhel-7-server-ansible-2.9-rpms \
+  rhel-7-server-ose-4.5-rpms
+do
+  reposync --gpgcheck -lm --repoid=${repo} --download_path=</path/to/repos> 
+  createrepo -v </path/to/repos/>${repo} -o </path/to/repos/>${repo} 
+done
+
+sudo yum install httpd
+mv /path/to/repos /var/www/html/
+chmod -R +r /var/www/html/repos
+#restorecon -vR /var/www/html
+
+
+systemctl enable httpd
+systemctl start httpd
+
+/etc/yum.repos.d/ose.repo
+[rhel-7-server-rpms]
+name=rhel-7-server-rpms
+baseurl=http://<server_IP>/repos/rhel-7-server-rpms 
+enabled=1
+gpgcheck=0
+[rhel-7-server-extras-rpms]
+name=rhel-7-server-extras-rpms
+baseurl=http://<server_IP>/repos/rhel-7-server-extras-rpms 
+enabled=1
+gpgcheck=0
+[rhel-7-server-ansible-2.9-rpms]
+name=rhel-7-server-ansible-2.9-rpms
+baseurl=http://<server_IP>/repos/rhel-7-server-ansible-2.9-rpms 
+enabled=1
+gpgcheck=0
+[rhel-7-server-ose-3.11-rpms]
+name=rhel-7-server-ose-3.11-rpms
+baseurl=http://<server_IP>/repos/rhel-7-server-ose-3.11-rpms 
+enabled=1
+gpgcheck=0
