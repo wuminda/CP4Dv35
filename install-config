@@ -1,0 +1,35 @@
+apiVersion: v1
+baseDomain: xxx.xxx.com
+compute:
+- hyperthreading: Enabled
+  name: worker
+  replicas: 0
+controlPlane:
+  hyperthreading: Enabled
+  name: master
+  replicas: 3
+metadata:
+  name: coc-g1
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  networkType: OpenShiftSDN
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  none: {}
+fips: false
+pullSecret: '{"auths": {"coc-g1-bastion.coc-g1.xxx.xxx.com:5000": {"auth": "YWRtaW46cGFzc3cwcmQ="}}}'
+sshKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDG9HnjuGMifdsa/NLQXjljCBtkuD9O/RH3dLtzdHaVSxny+AQ1m67Hnf6Ys7oHvcbSio9x7Xsr0Q7BElrY6TQXP9uE8U06USNcx3T6nSZpQy+Rvq4i73xnpo9wnLsobSvbskhlt9lplw9hmLnplhTKiitB5+MvHkpANPsk3tTA6RVEbsxwCWi4VgoJIEZTQzhmZcbDxYyEyveO5zOZAc22KUWF+2fGkNlQDN4gzoWoEHi4lfRjovGF0v/c1E48nx5/M/u7HVTVTeKbiCg/m2JHGgM872lHmakEqmgcaMC7ngoBEYqCDuPbkgHrhy6IHhmPWf1B3rG5HPSHTKRkryPvKltL+KAClmxzPAUT5lM0UN+R+99RHjS39QbjKqegLvy2I02ByIswKt3cfyqOqgEe/B/B9TVVr8iOZmW0TCPqujuX56whalnUl7y42U81DfxYBbgSLhWYJT4F2qoPZpDEFA9QqvZ2KdLLzQXuJ2bVyQafY2s28xbeYyVI8hMRqQYbLeJk/DupBAEyDexNZPrI1P5JhUUxxOL5UPRjxlbbZwf16Dh/Ixdw4WWV2B/WHaogoGTVmCfHB8B5Sy217KNfzNI+w591AozzTOHw3EEM6G0W3pVJxEjKBnFxNEpgSFMXvzQoKiKVuNdRCou8Yd2oXVVOhquyHfoADbC067auBw== root@coc-g1-bastion'
+additionalTrustBundle: | 
+  -----BEGIN CERTIFICATE-----
+  MIIFRTCCAy2gAwIBAgIJAIBT3/15HWYiMA0GCSqGSIb3DQEBCwUAMDkxCzAJBgNVBAYTAlVTMSowKAYDVQQDDCFjb2MtZzEtYmFzdGlvbi5jb2MtZzEuY2RsLmlibS5jb20wHhcNMjAwOTE0MDcwNzI5WhcNMjEwOTE0MDcwNzI5WjA5MQswCQYDVQQGEwJVUzEqMCgGA1UEAwwhY29jLWcxLWJhc3Rpb24uY29jLWcxLmNkbC5pYm0uY29tMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEArQaj4r99JJ3UUn8Zfc6rbJE2YbVls7nQQ8cMU3AA000DZf998ZcRN+BfqR+4USjzunzZSu+VQtFcD3I3i77FqmdOz41GBmute+IwFApiahoo+kOJX/WBOgZUbei2U3D6JUP3Zl58MdEAOgDeZN91JxXKaNr8YQnHHTB4vKp+Ra/bYMhCGXTcTxSqkA9DH/reyiB/S/LnOr+YJe+zDk8zrImylM/O/6q+Wgd2B5UryxejQOKzvfU8R6hjoXfGee8CxAuTfh1wVNAI+aIPCALOSydulf3e/iDyVp/Xf+GO3Z5yxYJuh/XRcAu/XwPXbUqxLBtcywPoKPuBDOXtpBkrN0qIQ2tY/I4PEu9bAM64aAxbBB1wP6vrbylnvcbPhbSapworWLNDn/Cnjy2PPn+IoKS7ImEwJNPqAaAFvgsPrqe17mXXfqaTs/VDmEENh9b76w/UNE+E5h2C7zrbGj7aYkxivAJ/jauOlr6623kKsj2YzV5N5KWYLxctd+H4U2u0/+mhSGEjeEH/0WfCZ+xgGQz066KbztPP4Cf0k+00wspw/uLSSmEl6tjGtHliaxnW7+Yi5SuZaKUYO/PpnZydAzND1ucYXmiPZFl5h+QYYvxqs9ICMTF/vJVgcNvKpNaXQl7zMIpXjP7yrTWycBYsgn1Xt2Lt1yzUQ5Rnv+GoQ4MCAwEAAaNQME4wHQYDVR0OBBYEFJlKU7QL9V1n7mtydoe3LkLh9nj2MB8GA1UdIwQYMBaAFJlKU7QL9V1n7mtydoe3LkLh9nj2MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggIBAGBGRlJMzwtR+CevS3MUzk4DPIb0rOvy5R6natKpeZqo2GKgAV+S0ZRL8v/rmrRN9Dq5FnLNWiMut32iQNNz/QyKLuFYLl/nptcXtdi8qyZ+ioQB6Rm9mi+xPcGoULtP62/sriogGXZBSm6JXueJE04Q4cqqeoG8D2LuUVvJk6sFiXIOiPi+s4sCaWD4XBHmu+25IPoMkt5oTQle44v4dd4X+a/lZZ+ExIvlYaO/3WwnCENbj/Y0sjxN7Xafr5Q/um7+WY/1xKI9uxporzg5abfhQB/EuxvM/PpS6hqO+2ZEIYV3eV2g8LIQGkREBw/dY1FiINYzmFgo5O9o3dYXkOjzDdsJrHInDwbPzAOxzVJSlRdkT4vpBNdogFWtvicJvmmQhzoECJK29YCPKGLh8R0t5Z2QOfiOpVZwAjn1gUjhy2NGqaUHjF5n1c1Ol9uyALtqDhTsIcs7ROlM7mCeB3ynIgRHbFagX6QUYduBdhady95H+cfEip5TZpPKR6qdO7gpTlldBkDhAH3IH30e5nW/LnpDQ0XxsV5Y6yoqtq4AZRyECbHt4XkbfeN906kvjmR3obvaZU1eDw4wICzwIDpaIYMeDQZvXM66Jf3bw+jdvq6EKr0k4dTA73+GyuMJ5WEi8YO0kiVdJ3vVP/B8qMJf+VKRW7usCkCxyf6TGQyu
+  -----END CERTIFICATE-----
+imageContentSources:
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-release
+- mirrors:
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
