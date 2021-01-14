@@ -22,4 +22,4 @@ spec:
         filesystem: root
         mode: 420
         path: /etc/chrony.conf
-  osImageURL: ""s
+  osImageURL: ""
