@@ -1,0 +1,311 @@
+Timeout settings (Load Balancer only) 	HAProxy timeout should be set to 5 minutes
+Max open files on Compute  	66560
+Max process on Compute 	12288
+Kernel Virtual Memory (on Compute)	"vm.max_map_count=262144"
+Message Limit (on Compute)	kernel.msgmax = 65536
+kernel.msgmnb = 65536
+kernel.msgmni = 32768
+Shared Memory Limit (on Compute)	kernel.shmmax = 68719476736
+kernel.shmall = 33554432
+kernel.shmmni = 16384
+Semaphore Limit (on Compute)	"kernel.sem = 250 1024000 100 16384"
+
+
+#oc login https://api.xxx.ibmcloudpack.com:6443 -u ocadmin -p 
+Login successful.
+
+Check the HAProxy timeout settings in the /etc/haproxy/haproxy.cfg file on load balancer.
+The recommended values are at least:
+timeout client          300s 
+timeout server          300s 
+
+# cat /etc/haproxy/haproxy.cfg  | grep timeout
+
+	timeout http-request    10s
+	timeout queue           1m
+	timeout connect         10s
+	timeout client          1m
+	timeout server          1m
+	timeout http-keep-alive 10s
+	timeout check           10s
+
+If the timeout values are less than 300 seconds (5 minutes), update the value:
+To change the timeout client setting, enter the following command:
+
+sed -i -e "/timeout client/s/ [0-9].*/ 5m/" /etc/haproxy/haproxy.cfg
+
+To change the timeout server setting, enter the following command:
+sed -i -e "/timeout server/s/ [0-9].*/ 5m/" /etc/haproxy/haproxy.cfg
+
+
+systemctl restart haproxy
+
+yum -y install python3
+
+cat << EOF > /tmp/50-worker-cp4d-sysctl.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+ labels:
+   machineconfiguration.openshift.io/role: worker
+ name: 50-worker-cp4d-sysctl
+spec:
+ config:
+   ignition:
+     version: 2.2.0
+   storage:
+     files:
+     - contents:
+         source: data:,vm.max_map_count%20%3D%20262144%0Akernel.msgmax%20%3D%2065536%0Akernel.msgmnb%20%3D%2065536%0Akernel.msgmni%20%3D%2032768%0Akernel.shmmax%20%3D%2021474836480%0Akernel.shmall%20%3D%2010485760%0Akernel.shmmni%20%3D%205120%0Akernel.sem%20%3D%20250%201024000%20100%2016384%0A
+       filesystem: root
+       mode: 0644
+       path: /etc/sysctl.d/50-worker-cp4d-sysctl.conf
+EOF
+
+
+oc create -f /tmp/50-worker-cp4d-sysctl.yaml
+
+
+Copy the crio.conf settings from a worker node by using the following command:
+scp core@$(oc get nodes | grep worker | head -1 | awk '{print $1}'):/etc/crio/crio.conf /tmp/crio.conf
+
+Update the pids_limit and default_ulimits settings in the crio.conf
+
+sed -i 's/pids_limit.*/pids_limit = 12290\ndefault_ulimits = [\n\ \ \ \ "nofile=66560:66560",\n]/g' /tmp/crio.conf
+crio_conf=$(cat /tmp/crio.conf | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(''.join(sys.stdin.readlines())))")
+
+
+cat << EOF > /tmp/51-worker-cp4d-crio-conf.yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+ labels:
+   machineconfiguration.openshift.io/role: worker
+ name: 51-worker-cp4d-crio-conf
+spec:
+ config:
+   ignition:
+     version: 2.2.0
+   storage:
+     files:
+     - contents:
+         source: data:,${crio_conf}
+       filesystem: root
+       mode: 0644
+       path: /etc/crio/crio.conf
+EOF
+
+
+Apply the new machineconfig to the cluster by running the following command: 
+oc create -f /tmp/51-worker-cp4d-crio-conf.yaml
+
+
+watch -n 10 'oc get mcp'
+
+oc get no
+
+ssh core@ocp-worker-1 -t sysctl vm.max_map_count
+
+export NAMESPACE=zen
+
+oc new-project $NAMESPACE
+oc project $NAMESPACE
+
+Install Cloud Pak for Data Lite 
+Replace variables for your deploy
+Please make sure that command variables match your environment: 
+
+•	Find & replace zen with the name of your Cloud Pak for Data project.
+•	Replace /cpd/bin/cpd-cli-workspace with your load-from directory
+Your load-from directory is the directory where you downloaded the assembly to, by default it is cpd-cli-workspace
+•	Find & replace your working directory, with the name of the directory you will be working from, here /cpd/bin
+•	Route to the registry.
+
+export REGISTRY=`oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'`
+export LOAD_FROM=/cpd/bin/cpd-cli-workspace
+export NAMESPACE=zen
+export STORAGE_CLASS=managed-nfs-storage
+export IMAGE_REGISTRY_USER=$(oc whoami)
+export IMAGE_REGISTRY_PASSWORD=$(oc whoami -t)
+export VERSION=3.5.1
+
+Note:
+If you are using kubeadmin for the installation, then you’d better specify the IMAGE_REGISTRY_USER directly with kubeadmin rather than using $(oc whoami)
+
+Push images to the image registry 
+./cpd-cli preload-images  \
+--assembly lite \
+--action push \
+--target-registry-username $IMAGE_REGISTRY_USER \
+--target-registry-password $IMAGE_REGISTRY_PASSWORD \
+--load-from $LOAD_FROM \
+--transfer-image-to $REGISTRY/$NAMESPACE \
+--insecure-skip-tls-verify \
+--accept-all-licenses
+
+Run Admin Setup
+./cpd-cli adm \
+--assembly lite \
+--latest-dependency \
+--namespace $NAMESPACE \
+--load-from $LOAD_FROM \
+--apply \
+--verbose \
+--accept-all-licenses
+
+Dry Run
+
+./cpd-cli install \
+--assembly lite \
+--namespace $NAMESPACE \
+--storageclass $STORAGE_CLASS \
+--load-from $LOAD_FROM \
+--cluster-pull-username=$IMAGE_REGISTRY_USER \
+--cluster-pull-password=$IMAGE_REGISTRY_PASSWORD \
+--cluster-pull-prefix image-registry.openshift-image-registry.svc:5000/$NAMESPACE \
+--latest-dependency \
+--accept-all-licenses \
+--dry-run \
+--verbose \
+--insecure-skip-tls-verify
+
+
+Install
+
+./cpd-cli install \
+--assembly lite \
+--namespace $NAMESPACE \
+--storageclass $STORAGE_CLASS \
+--load-from $LOAD_FROM \
+--cluster-pull-username=$IMAGE_REGISTRY_USER \
+--cluster-pull-password=$IMAGE_REGISTRY_PASSWORD \
+--cluster-pull-prefix image-registry.openshift-image-registry.svc:5000/$NAMESPACE \
+--latest-dependency \
+--accept-all-licenses \
+--verbose \
+--insecure-skip-tls-verify
+
+
+Monitor the install/pods:
+
+Run the following commands in another terminal window 
+For pods not in running state:
+watch " oc get pods -n $NAMESPACE | egrep -iv '1/1|2/2|3/3|4/4|completed'"
+
+For all pods in namespace cpd: 
+watch "oc get pods -n NAMESPACE"
+
+Verify the installation installed successfully:
+./cpd-cli status --assembly lite --namespace $NAMESPACE
+
+If the installation completed successfully, the status of the assembly and the modules in the assembly is Ready.
+
+
+
+Install Cloud Pak for Data WSL 
+
+Push images to the image registry 
+
+./cpd-cli preload-images  \
+--assembly wsl \
+--action push \
+--target-registry-username $IMAGE_REGISTRY_USER \
+--target-registry-password $IMAGE_REGISTRY_PASSWORD \
+--load-from $LOAD_FROM \
+--transfer-image-to $REGISTRY/$NAMESPACE \
+--insecure-skip-tls-verify \
+--accept-all-licenses
+
+
+Run Admin Setup:
+./cpd-cli adm \
+--assembly wsl \
+--latest-dependency \
+--namespace $NAMESPACE \
+--load-from $LOAD_FROM \
+--apply \
+--verbose \
+--accept-all-licenses
+
+Install:
+
+./cpd-cli install \
+--assembly wsl \
+--namespace $NAMESPACE \
+--storageclass $STORAGE_CLASS \
+--load-from $LOAD_FROM \
+--cluster-pull-username=$IMAGE_REGISTRY_USER \
+--cluster-pull-password=$IMAGE_REGISTRY_PASSWORD \
+--cluster-pull-prefix image-registry.openshift-image-registry.svc:5000/$NAMESPACE \
+--latest-dependency \
+--accept-all-licenses \
+--verbose \
+--insecure-skip-tls-verify
+
+
+Monitor the install/pods:
+
+Run the following commands in another terminal window.
+For pods not in running state:
+   watch " oc get pods -n $NAMESPACE | egrep -iv '1/1|2/2|3/3|4/4|completed'"
+
+For all pods in namespace cpd: 
+   watch "oc get pods -n NAMESPACE"
+
+Verify the installation installed successfully:
+./cpd-cli status --assembly wsl --namespace $NAMESPACE
+
+If the installation completed successfully, the status of the assembly and the modules in the assembly is Ready.
+Install Cloud Pak for Data WML 
+
+Push images to the image registry 
+
+./cpd-cli preload-images  \
+--assembly wml \
+--action push \
+--target-registry-username $IMAGE_REGISTRY_USER \
+--target-registry-password $IMAGE_REGISTRY_PASSWORD\
+--load-from $LOAD_FROM \
+--transfer-image-to $REGISTRY/$NAMESPACE \
+--insecure-skip-tls-verify \
+--accept-all-licenses
+
+
+Run Admin Setup:
+./cpd-cli adm \
+--assembly wml \
+--latest-dependency \
+--namespace $NAMESPACE \
+--load-from $LOAD_FROM \
+--apply \
+--verbose \
+--accept-all-licenses
+
+Install:
+
+./cpd-cli install \
+--assembly wml \
+--namespace $NAMESPACE \
+--storageclass $STORAGE_CLASS \
+--load-from $LOAD_FROM \
+--cluster-pull-username=$IMAGE_REGISTRY_USER \
+--cluster-pull-password=$IMAGE_REGISTRY_PASSWORD \
+--cluster-pull-prefix image-registry.openshift-image-registry.svc:5000/$NAMESPACE \
+--latest-dependency \
+--accept-all-licenses \
+--verbose \
+--insecure-skip-tls-verify
+
+Monitor the install/pods:
+
+Run the following commands in another terminal window 
+For pods not in running state:
+   watch " oc get pods -n $NAMESPACE | egrep -iv '1/1|2/2|3/3|4/4|completed'"
+
+For all pods in namespace cpd: 
+   watch "oc get pods -n $NAMESPACE"
+
+
+Verify the installation installed successfully:
+./cpd-cli status --assembly wml --namespace $NAMESPACE
+If the installation completed successfully, the status of the assembly and the modules in the assembly is Ready.
