@@ -1,0 +1,99 @@
+$ oc project default
+$ export PROJECT=$(oc project -q)
+$ export REGISTRY=$(oc registry info)
+$ podman load -i /ibm/nfs-client-provisioner.tar
+
+$ podman tag quay.io/external_storage/nfs-client-provisioner:latest $REGISTRY/$PROJECT/nfs-client-provisioner:latest
+$ podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
+$ podman push $REGISTRY/$PROJECT/nfs-client-provisioner:latest
+
+$ sed -i '' "s/image:.*/image:REGISTRY/PROJECT/nfs-client-provisioner:latest/g" /nfs-subdir-external-provisioner-master/deploy/deployment.yaml
+
+$ podman load -i /ibm/busybox.tar
+
+$ podman tag gcr.io/google_containers/busybox:1.24 \
+$ $REGISTRY/$PROJECT/busybox:1.24
+
+$ podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
+$ podman push $REGISTRY/$PROJECT/busybox:1.24
+
+$ sed -i '' "s/image:.*/image:REGISTRY/PROJECT/busybox:1.24/g" /nfs-subdir-external-provisioner-master/deploy/test-pod.yaml
+
+$ NAMESPACE=`oc project -q`
+$ sed -i '' "s/namespace:.*/namespace:NAMESPACE/g" /nfs-subdir-external-provisioner-master/deploy/rbac.yaml
+
+$ oc create -f deploy/rbac.yaml
+$ oc adm policy add-scc-to-user hostmount-anyuid 
+
+Edit deploy/deployment.yaml
+Edit deploy/class.yaml file
+
+$ oc create -f deploy/class.yaml
+$ oc create -f deploy/deployment.yaml
+$ oc create -f deploy/test-claim.yaml
+$ cat test-claim.yaml 
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+ name: test-claim
+ annotations:
+ volume.beta.kubernetes.io/storage-class: “managed-nfs-storage”
+spec:
+ accessModes:
+ — ReadWriteMany
+ resources:
+ requests:
+ storage: 1Mi
+
+
+$ oc get pvc
+$ oc create -f test-pod.yaml 
+
+
+
+$ vi image-registry-sc.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: image-registry-sc
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 200Gi
+  nfs:
+    path: /opt/IBM/Cloud/OpenShift/PV/images
+    server: 9.123.120.109
+  persistentVolumeReclaimPolicy: Retain
+
+$ oc apply -f image-registry-sc.yaml
+
+$ oc get pv
+$ vi image-registry-pv.yaml
+piVersion: v1
+kind: PersistentVolume
+metadata:
+  name: image-registry-sc1
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 200Gi
+  nfs:
+    path: /xxx
+    server: 9.123.xxx.xxx
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: image-registry-sc
+  
+  
+$ oc apply -f image-registry-pv.yaml
+
+
+$ oc edit configs.imageregistry.operator.openshift.io
+spec:
+...
+  managementState: Managed
+...
+  storage:
+    pvc:
+      claim: image-registry-pvc
