@@ -115,11 +115,11 @@ Install Cloud Pak for Data Lite
 Replace variables for your deploy
 Please make sure that command variables match your environment: 
 
-•	Find & replace zen with the name of your Cloud Pak for Data project.
-•	Replace /cpd/bin/cpd-cli-workspace with your load-from directory
+Find & replace zen with the name of your Cloud Pak for Data project.
+Replace /cpd/bin/cpd-cli-workspace with your load-from directory
 Your load-from directory is the directory where you downloaded the assembly to, by default it is cpd-cli-workspace
-•	Find & replace your working directory, with the name of the directory you will be working from, here /cpd/bin
-•	Route to the registry.
+Find & replace your working directory, with the name of the directory you will be working from, here /cpd/bin
+Route to the registry.
 
 export REGISTRY=`oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'`
 export LOAD_FROM=/cpd/bin/cpd-cli-workspace
