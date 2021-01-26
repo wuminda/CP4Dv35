@@ -1,3 +1,8 @@
+OCP 版本可以用最新的
+比如：
+export OCP_RELEASE="4.5.24"
+export RHCOS_RELEASE="4.5.6"
+
 
 Disk latency test
  
