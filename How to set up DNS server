@@ -1,3 +1,25 @@
+The following DNS A/AAAA and SRV record must point to the the control plane machines respectively.
+
+etcd-0.<cluster_name>.base_domain IN A master1_IP
+
+etcd-1.<cluster_name>.base_domain IN A master2_IP
+
+etcd-2.<cluster_name>.base_domain IN A master3_IP
+
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-0.<cluster_name>.base_domain.
+
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-1.<cluster_name>.base_domain.
+
+_etcd-server-ssl._tcp IN SRV 0 10 2380 etcd-2.<cluster_name>.base_domain.
+
+The following DNS A/AAAA or CNAME record must point to the load balancer for the control plane machines.
+
+*.apps.<cluster_name>.base_domain IN A load_balancer_IP
+
+api.<cluster_name>.base_domain IN A load_balancer_IP
+
+api-int.<cluster_name>.base_domain IN A load_balancer_IP
+
 OpenShift Container Platform requires a fully functional DNS server in the environment. If you do not have a properly functioning DNS environment, you might experience failure with:
 
 Product installation via the reference Ansible-based scripts
