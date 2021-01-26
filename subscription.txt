@@ -17,6 +17,8 @@ sudo yum -y install yum-utils createrepo
 
 mkdir -p </path/to/repos>
 
+如果有光盘可以去掉 rhel-7-server-rpms，因为 rhel-7-server-rpms 会非常大，其他都比较小
+
 for repo in \
   rhel-7-server-rpms \
   rhel-7-server-extras-rpms \
