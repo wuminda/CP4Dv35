@@ -1,0 +1,203 @@
+OpenShift Container Platform requires a fully functional DNS server in the environment. If you do not have a properly functioning DNS environment, you might experience failure with:
+
+Product installation via the reference Ansible-based scripts
+Deployment of the infrastructure containers (registry, routers)
+Access to the OpenShift Container Platform web console, because it is not accessible via IP address alone
+Considering this requiremment for DNS, if there's no available DSN server for your Openshift installation, you may have to set up your own DNS server. This is ideally a separate host running DNS software and can provide name resolution to hosts and containers running on the platform. And here is a step by step guide for setting up BIND DNS server in chroot environment for Red Hat  7.7.
+
+Basic information in this guide as an example:
+
+hostname : jhw-bastion
+
+ip address: 9.112.234.34
+
+1. Install the required rpms to configure your DNS server
+
+NOTE: On RHEL system you must have an active subscription to RHN or you can configure a local offline repository using which "yum" package manager can install the provided rpm and it's dependencies.
+
+# yum install bind bind-chroot caching-nameserver
+
+Since we will be using chroot environment disable the below services.
+
+# systemctl stop named
+
+# systemctl disable named
+
+2. Next copy the required files inside chroot directory.
+
+NOTE: Use -p argument along with cp command to preserve the permission and ownership of all the files and directories
+
+[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.9.4/sample/etc/*  /var/named/chroot/etc/
+
+[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.9.4/sample/var/named/* /var/named/chroot/var/named/
+
+3. Configure the primary configuration file
+
+# cd /var/named/chroot/etc/
+
+1) Move the existing named.conf to be named.conf.bak
+
+# cp named.conf  named.conf.bak
+
+2) Clear the existing named.conf and paste the template content from this box link named.conf.template 
+
+The zone related content information must be added in /var/named/chroot/etc/named.conf, append the below entries.
+
+zone "ring.coc.com" IN {        type master;        file "cloud.zone";};
+
+zone "9.in-addr.arpa" IN {        type master;        file "cloud.reverse";};
+
+Here cloud.zone is our forward zone file while cloud.reverse is our reverse zone file for reverse lookup entry
+
+IMPORTANT NOTE: The reverse lookup zone contains 34.234.112 because my host IP is 9.112.234.34
+
+3)Create  forward and reverse zone file
+
+The zone related files are available under below path
+
+# cd /var/named/chroot/var/named/
+
+Let's create our forward and reverse zone file, the filenames will be same as what we gave in our named.conf file above.
+
+Here are the templates which we can use.
+
+#vi cloud.zone
+
+Refer the content of the cloud.zone template. Paste, modify and then save.
+
+#vi cloud.reverse
+
+Refer the content of the cloud.reverse template. Paste, modify and then save.
+
+4. Change the permission of all the files under this location with root as user owner and named as the group owner
+
+# cd /var/named/chroot/var/named/
+
+# chown root:named *
+
+Although for the data partition the user and group owner must be 'named'
+
+# chown -R  named:named data
+
+5. Validate the file configuration
+
+[root@jhw-bastion named]#  named-checkzone jhw-bastion cloud.zone
+
+zone jhw-bastion/IN: loaded serial 2019012302
+
+OK
+
+[root@jhw-bastion named]#  named-checkzone jhw-bastion cloud.reverse
+
+zone jhw-bastion/IN: loaded serial 2019012302
+
+OK
+
+All looks ok there, then check the configuration file using below commands.
+
+[root@jhw-bastion named]#  cp /var/named/chroot/etc/named.conf /etc/named.conf
+
+[root@jhw-bastion named]#  named-checkconf -t /var/named/chroot/ /etc/named.conf
+
+[root@golinuxhub-client named]# echo $?
+
+if the result is 0 then it means the above command executed successfully.
+
+6.Validate the SELinux setting
+
+IMPORTANT NOTE: The SELinux should be Permissive mode.
+
+# getenforce
+
+Permissive
+
+Otherwise, you need to modify it as bellows.
+
+ [root@jhw-bastion named]#  vi /etc/selinux/config
+
+Change the SELINUX value to "SELINUX=permissive"
+
+ [root@jhw-bastion named]#  shutdown -r now
+
+7. Start the named-chroot service
+
+ [root@jhw-bastion named]# systemctl restart named-chroot
+
+ [root@jhw-bastion named]# systemctl status named-chroot
+
+If the status is active, then it means the service is up and running.
+
+8.Validate if the DNS server works in a client machine
+
+1)Make sure the resolv.conf in the client machine contains the IP of your setup so that it can act as a DNS server.
+
+# cat /etc/resolv.conf
+
+search ring.coc.com
+
+nameserver 9.112.234.34
+
+2) Validate the DNS server for our reverse zone file using dig.
+
+ [root@jhw-bastion named]# dig -x 9.112.234.34
+
+If you can get a positive response with a ANSWER for our QUERY it means the reverse zone file configured correctly.
+
+3)Validate our DNS server for our forward zone file using nslookup.
+
+ [root@jhw-bastion named]# nslookup ring.coc.com
+
+Server:        9.112.234.34
+
+Address:    9.112.234.34#53
+
+Name:    ring.coc.com
+
+Address: 9.112.234.34
+
+If you can get a positive response with the above result, it means the forward zone file configured correctly.
+
+ 
+
+Appendix
+1. How to specify your DNS server permantly
+
+1) Modify the configuration file of your network card
+
+[root@jhw-bastion ~]# vi /etc/sysconfig/network-scripts/ifcfg-ens192 (ifcfg-ensxxx)
+
+DNS1=9.112.234.34
+
+DOMAIN=ring.coc.com
+
+2)Restart the NetworkManager
+
+[root@jhw-bastion ~]# systemctl restart NetworkManager
+
+3)Check if the /etc/resolv.conf changed accordingly.
+
+
+Background
+Route is the most common way to access Openshift cluster. A router is configured to accept external requests and proxy them based on the configured routes. After you install Openshift or Cloud Pak for Data, there would be routes generated accordingly for accessing the cluster. And here is an example.
+
+
+Among the routes listed in the picture, the routes with hostname console.apps.jhwocpd-lb-1.fyre.ibm.com and jhw-cpd-jhw.apps.jhwocpd-lb-1.fyre.ibm.com are used to access the Openshift and CPD console respectively. While, if there's no corresponding DNS entry registered in DSN server, you won't be able to acces them (Creating an entry in the /etc/hosts file for mapping the route to IP is not recommended). And even you can ask Administrator to add the DNS entries for the specific routes, every time there are new routes generated for new services then the Administrator has to maintain it accordingly. It's very inconvinient. That's why a DNS wildcard entry required.
+ 
+A DNS wildcard entry is a record in a DNS zone that will match requests for non-existent domain names. A wildcard DNS record is specified by using a "*" as the leftmost label (part) of a domain name, e.g. *.apps.jhwocpd-lb-1.fyre.ibm.com.
+ 
+How to prepare and create a DNS wildcard entry
+1.Create a sub-domain in the DSN server and make it the hostname of the load balancer node . Let's take jhwocpd-lb-1.fyre.ibm.com for example.
+ 
+2.Create a sub-domain apps.jhwocpd-lb-1.fyre.ibm.com under the sub-domain jhwocpd-lb-1.fyre.ibm.com
+ 
+3.Create a  DNS wildcard entry *.apps.jhwocpd-lb-1.fyre.ibm.com under the sub-domain apps.jhwocpd-lb-1.fyre.ibm.com.
+*.apps.jhwocpd-lb-1.fyre.ibm.com. 300 IN A 172.30.83.169
+Note: the IP 172.30.83.169 is the load balancer IP or an IP address of the host where the router will be deployed.
+ 
+4. Specify the cluster's default subdomain in Openshift's inventory file before installation.
+For example:
+ openshift_master_cluster_hostname=jhwocpd-lb-1.fyre.ibm.com
+
+openshift_master_cluster_public_hostname=jhwocpd-lb-1.fyre.ibm.com
+
+openshift_master_default_subdomain=apps.jhwocpd-lb-1.fyre.ibm.com
