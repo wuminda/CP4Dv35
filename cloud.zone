@@ -1,0 +1,44 @@
+$TTL 10
+@ IN SOA ring.coc.com. root.coc.com (
+    2019012302;
+    1H;
+    2D;
+    3W;
+    10 )
+@ IN NS ring.coc.com.
+@ IN A 9.112.234.34
+
+ring-master1.ring.coc.com. IN A 9.112.232.97
+ring-master2.ring.coc.com. IN A 9.112.232.148
+ring-master3.ring.coc.com. IN A 9.112.232.40
+ring-worker1.ring.coc.com. IN A 9.112.234.64
+ring-worker2.ring.coc.com. IN A 9.112.234.91
+ring-worker3.ring.coc.com. IN A 9.112.234.26
+ring-lb.ring.coc.com. IN A 9.112.249.91
+*.apps.ring-lb.ring.coc.com. IN A 9.112.249.91
+
+cp4dt01.ring.coc.com. IN A 9.111.143.166
+cp4dt02.ring.coc.com. IN A 9.111.143.167
+cp4dt03.ring.coc.com. IN A 9.111.143.168
+cp4dt04.ring.coc.com. IN A 9.111.143.169
+cp4dt05.ring.coc.com. IN A 9.111.143.170
+cp4dt06.ring.coc.com. IN A 9.111.143.171
+bjosm01.ring.coc.com. IN A 9.111.143.147
+bjosm02.ring.coc.com. IN A 9.111.143.159
+*.apps.cp4dt01.ring.coc.com. IN A 9.111.143.166
+
+lbs-master1.ring.coc.com. IN A 9.111.125.61
+lbs-worker1.ring.coc.com. IN A 9.111.125.62
+lbs-worker2.ring.coc.com. IN A 9.111.125.63
+lbs-bastion.ring.coc.com. IN A 9.111.98.216
+*.apps.lbs-master1.ring.coc.com. IN A 9.111.125.61
+
+clu3-master.ring.coc.com. IN A 9.111.125.33
+clu3-worker1.ring.coc.com. IN A 9.111.125.55
+clu3-worker2.ring.coc.com. IN A 9.111.125.64
+clu3-bastion.ring.coc.com. IN A 9.111.98.221
+*.apps.clu3-master.ring.coc.com. IN A 9.111.125.33
+
+cluter1-master1.ring.coc.com. IN A 9.111.125.58
+cluster-worker1.ring.coc.com. IN A 9.111.125.59
+cluster-worker2.ring.coc.com. IN A 9.111.125.60
