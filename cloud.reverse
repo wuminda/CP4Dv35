@@ -1,0 +1,40 @@
+$TTL 10
+@ IN SOA ring.coc.com. root.coc.com (
+    2019012302;
+    1H;
+    2D;
+    3W;
+    10 )
+@ IN NS ring.coc.com.
+@ IN A 9.112.234.34
+
+97.232.112 IN PTR ring-master1.ring.coc.com.
+148.232.112 IN PTR ring-master2.ring.coc.com.
+40.232.112 IN PTR ring-master3.ring.coc.com.
+64.234.112 IN PTR ring-worker1.ring.coc.com.
+91.234.112 IN PTR ring-worker2.ring.coc.com.
+26.234.112 IN PTR ring-worker3.ring.coc.com.
+91.239.112 IN PTR ring-lb.ring.coc.com.
+
+166.143.111 IN PTR cp4dt01.ring.coc.com.
+167.143.111 IN PTR cp4dt02.ring.coc.com.
+168.143.111 IN PTR cp4dt03.ring.coc.com.
+169.143.111 IN PTR cp4dt04.ring.coc.com.
+170.143.111 IN PTR cp4dt05.ring.coc.com.
+171.143.111 IN PTR cp4dt06.ring.coc.com.
+147.143.111 IN PTR bjosm01.ring.coc.com.
+159.143.111 IN PTR bjosm02.ring.coc.com.
+
+61.125.111 IN PTR lbs-master1.ring.coc.com.
+62.125.111 IN PTR lbs-worker1.ring.coc.com.
+63.125.111 IN PTR lbs-worker2.ring.coc.com.
+216.98.111 IN PTR lbs-bastion.ring.coc.com.
+
+33.125.111 IN PTR clu3-master.ring.coc.com.
+55.125.111 IN PTR clu3-worker1.ring.coc.com.
+64.125.111 IN PTR clu3-worker2.ring.coc.com.
+221.98.111 IN PTR clu3-bastion.ring.coc.com.
+
+58.125.111 IN PTR cluter1-master1.ring.coc.com.
+59.125.111 IN PTR cluster-worker1.ring.coc.com.
+60.125.111 IN PTR cluster-worker2.ring.coc.com.
