@@ -27,9 +27,13 @@ Since we will be using chroot environment disable the below services.
 
 NOTE: Use -p argument along with cp command to preserve the permission and ownership of all the files and directories
 
-[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.9.4/sample/etc/*  /var/named/chroot/etc/
+[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.11.4/sample/etc/*  /var/named/chroot/etc/
 
-[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.9.4/sample/var/named/* /var/named/chroot/var/named/
+[root@jhw-bastion ~]# cp -rpvf /usr/share/doc/bind-9.11.4/sample/var/named/* /var/named/chroot/var/named/
+
+$ mkdir /var/named/chroot/var/named/dynamic
+$ touch /var/named/chroot/var/named/dynamic/managed-keys.bind
+$ cp /etc/named.root.key /var/named/chroot/etc
 
 3. Configure the primary configuration file
 
