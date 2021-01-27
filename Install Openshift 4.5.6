@@ -570,7 +570,11 @@ Configure the boot order and make CD-ROM Drive the first boot option.
 Exit and save the changes. Then restart the VM and perform the CoreOS installation again.
 
 Launch the installation
+
+三台master做完，需要执行
 openshift-install --dir=installation_directory wait-for bootstrap-complete --log-level=debug
+待出现 It is now safe to remove the bootstrap resources 提示之后，从负载均衡器中删除bootstrap
+
 Gather logs (if the above command failed):
 ./openshift-install gather bootstrap --bootstrap 9.123.120.102 --master 9.123.120.103
 
@@ -585,6 +589,8 @@ Approve all：
 oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve
 Configure the Operators that are not available
 watch -n5 oc get clusteroperators
+
+安装最后执行 openshift-install --dir=/ocpinstall wait-for install-complete --log-level=debug
 Configure image registry
 oc describe configs.imageregistry.operator.openshift.io 
 oc edit configs.imageregistry.operator.openshift.io/cluster
