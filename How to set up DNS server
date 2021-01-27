@@ -147,6 +147,7 @@ Change the SELINUX value to "SELINUX=permissive"
 
 7. Start the named-chroot service
 
+systemctl enable named-chroot
  [root@jhw-bastion named]# systemctl restart named-chroot
 
  [root@jhw-bastion named]# systemctl status named-chroot
