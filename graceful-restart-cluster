@@ -1,0 +1,28 @@
+https://docs.openshift.com/container-platform/4.5/backup_and_restore/graceful-cluster-restart.html#graceful-restart-cluster
+https://docs.openshift.com/container-platform/4.5/backup_and_restore/graceful-cluster-shutdown.html
+
+Ensure you know what state the cluster is in
+What state pods are in
+oc get pods --all-namespaces
+oc get pods –all-namespaces | grep –Ev ‘1/1|2/2|3/3|4/4’ | grep –v ‘completed’
+What state my nodes are in
+oc get nodes --show-labels
+Knowing what is working and what isn’t is important when it comes to knowing what ‘the same as before’ looks like after you have started the cluster again.
+Recommendation is to resolve any issues in the cluster before proceeding– For example oc get nodes should show that all nodes are ready
+
+Cordon all of your worker nodes to prevent new pods from starting or moving
+oc adm cordon <node>
+Drain all of your worker nodes
+oc adm drain <node> --ignore-daemonsets --force --grace-period=30 --delete-local-data. This forces pods to stop, ignores any daemonsets that are running on the nodes, enforces a graceful termination period of 30s for pods to stop gracefully and removes any pods with local ephemeral data.
+
+
+Gracefully shut down all the workers first (shutdown –h now,)
+Gracefully shutdown all the infra nodes (shutdown –h now)
+Gracefully shutdown etcd nodes one by one
+Gracefully shutdown all the masters (shutdown –h now)
+
+
+Start Masters and wait for them to be ready (oc get nodes)
+Stat etcd
+Start Infra nodes and wait for them to be ready (oc get nodes)
+Start the worker nodes
