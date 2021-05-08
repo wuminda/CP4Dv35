@@ -437,7 +437,6 @@ firewall-cmd --permanent --zone=public --add-port=123/udp
 firewall-cmd --reload
 vi /etc/chrony.conf
 For the details, please refer to this template and modify the server and allow sections accordingly. It is recommended to take the Bastion node as the chrony server.
-https://ibm.box.com/s/vgo11wdax74ubx6hlfvkjckxyouy64vx
 systemctl restart chronyd
 Verify
 Run the chronyc tracking command to check chrony tracking.
@@ -462,11 +461,10 @@ GliL2Nocm9ueS9kcmlmdAogICAgbWFrZXN0ZXAgMS4wIDMKICAgIHJ0Y3N5bmMKICAgIGxvZ2RpciAvd
 Create the MachineConfig files, replacing the base64 string with the one you just created yourself.
 Refer to this template for adding the chrony.conf to master nodes.  Make sure you modify the base64 value accordingly.
 99-masters-chrony-configuration.yaml
-https://ibm.box.com/s/dzzdojnmhi34lrzn7l686m521uxqmup0
 
 Refer to this template for adding the chrony.conf to worker nodes. Make sure you modify the base64 value accordingly.
 99-workers-chrony-configuration.yaml
-https://ibm.box.com/s/klfbzti9ph1dy0t52bycr1w4dfdm97k7
+
 Make a backup copy of the configuration files.
 
 Add this file to the <installation_directory>/openshift directory.
@@ -589,7 +587,7 @@ Check  if configuration succeeds.
 exportfs -rav
 Create Storage Class  image-registry-sc
 Follow this guide Dynamic nfs provision for creating the storage class image-registry-sc.
-https://medium.com/faun/openshift-dynamic-nfs-persistent-volume-using-nfs-client-provisioner-fcbb8c9344e 
+
 
 Create PVC
 vi image-registry-pvc.yaml
@@ -608,7 +606,6 @@ spec:
     storageClassName: image-registry-sc
 
 You can use this template directly.
-https://ibm.box.com/s/a5h167t86he3jy5o046g4pgv698vx4tn 
 
 oc apply -f image-registry-pvc.yaml
 
