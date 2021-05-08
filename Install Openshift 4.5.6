@@ -386,6 +386,7 @@ Note:
 2) The pullSecret should be specified with the push secrect we created for accessing the local image registry.
 3) The additionalTrustBundle should be specified with the certificate we created for accessing the local image registry.
 In this installation case, it should be specified with the content of the certificate file /ocp4_downloads/registry/certs/registry.crt. And it should be one line. If there are multiple lines in the certificate file, you need to combine it into one line.
+cat /ocp4_downloads/registry/certs/registry.crt | paste -d "" -s -
 4) The content of the imageContentSources should be from the imageContentSources section of the output when doing mirror registry.
 imageContentSources:
 - mirrors:
