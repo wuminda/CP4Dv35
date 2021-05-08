@@ -1,0 +1,20 @@
+https://github.com/chuckersjp/coreos-iso-maker/archive/OCP4.5.zip
+https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.5/4.5.6/sha256sum.txt
+
+yum install ansible
+
+ocp_version: 4.5.6
+iso_checksum: 6e4f98f7d4f0a57803f323111fb48412a569e3c7b700c04b8e3d9d0a17f1951a
+iso_name: rhcos-4.5.6-x86_64-installer.x86_64.iso
+
+/tmp/rhcos-4.5.6-x86_64-installer.x86_64.iso
+
+sha256sum /tmp/rhcos-4.5.6-x86_64-installer.x86_64.iso
+iso_checksum: 6e4f98f7d4f0a57803f323111fb48412a569e3c7b700c04b8e3d9d0a17f1951a
+
+group_vars/all.yml 
+inventory.yml
+
+webserver_url 不支持 webserver_ignition_path
+
+ansible-playbook playbook-multi.yml -K 
