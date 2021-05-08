@@ -371,16 +371,13 @@ systemctl start haproxy
 systemctl status haproxy
 vi /etc/haproxy/haproxy.cfg
 For details, it is recommended to copy a  haproxy.cfg template from a workable environment and then modify it accordingly.
-haproxy template https://ibm.box.com/s/nco6340m1t4yrk945w4xm4bgtgqsqn2c 
 systemctl restart haproxy
 Create installation configuration file
 mkdir /ibm
 cd /ibm
 mkdir -p installation_directory
 cd installation_directory
-vi install-config.yaml 
-You can follow this install-config template:
-https://ibm.box.com/s/6ivavyiaxm6uwf6qo9dcime36gtm7guv
+vi install-config.yaml
 Note:
 1) It's ~/.ssh/id_rsa.pub rather than ~/.ssh/id_rsa will be specified in install-config.yaml
 2) The pullSecret should be specified with the push secrect we created for accessing the local image registry.
