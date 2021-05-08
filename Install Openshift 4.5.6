@@ -327,45 +327,7 @@ Username: admin
 Password: passw0rd
 Login Succeeded! 
 
-Check the created Push Secret
-cat push-secret.json
-Get the pull secret from RedHat's official site
-Go to https://cloud.redhat.com/openshift/install/metal
-And then download the pull secret  by clicking 'Dowload pull secret' or copy it by clicking 'Copy pull secret' and save it to a text file pull-secret.txt .  
-Note: You need a RedHat account for downloading the pull secret.
-Merge the push secret and the pull secret
-Upload the pull secret file pull-secret.txt to the same directory as what the push secret file push-secret.json resides in.
-Merge the pull-secret.txt and push-secret.json into a new file pull-push_secret.json.
-cat pull-secret.txt | jq . > pull-push_secret.json
-cat pull-push_secret.json
-At the end of the third line to the last, add the content of the push-secret.json to the pull-push_secret.json.
-It would be like this:
-[root@coc-g1-bastion ~]# cat pull-push_secret.json
-{
-  "auths": {
-    "cloud.openshift.com": {
-      "auth": "xxx",
-      "email": "xxxxxx@cn.ibm.com"
-    },
-    "quay.io": {
-      "auth": "xxx",
-      "email": "xxxxxx@cn.ibm.com"
-    },
-    "registry.connect.redhat.com": {
-      "auth": "xxx",
-      "email": "xxxxxx@cn.ibm.com"
-    },
-    "registry.redhat.io": {
-      "auth": "xxx",
-      "email": "xxxxxx@cn.ibm.com"
-    },
-    "coc-g1-bastion.coc-g1.xxx.xxx.com:5000": {
-        "auth": "YWRtaW46cGFzc3cwcmQ="
-   }
-  }
-}
-Check if the modification is correct.
-cat pull-push_secret.json | jq
+
 Config Http Server
 yum install ?y httpds
 systemctl enable httpd
