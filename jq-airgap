@@ -1,0 +1,10 @@
+方法一：
+yum install oniguruma-6.8.2-1.el7.x86_64.rpm
+yum install jq-1.6-2.el7.x86_64.rpm
+
+方法二：
+Download and install jq
+https://stedolan.github.io/jq/download/
+wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+chmod +x jq-linux64
+mv jq-linux64 /usr/local/bin
