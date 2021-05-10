@@ -28,8 +28,8 @@ additionalTrustBundle: |
   -----END CERTIFICATE-----
 imageContentSources:
 - mirrors:
-  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
-  source: quay.io/openshift-release-dev/ocp-release
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-release
 - mirrors:
-  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
-  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+  - coc-g1-bastion.coc-g1.xxx.xxx.com:5000/ocp4/openshift4
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
