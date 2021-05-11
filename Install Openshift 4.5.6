@@ -549,87 +549,10 @@ Configure the Operators that are not available
 watch -n5 oc get clusteroperators
 
 安装最后执行 openshift-install --dir=/ibm/installation_directory wait-for install-complete --log-level=debug
-Configure image registry
-oc describe configs.imageregistry.operator.openshift.io/cluster 
-oc edit configs.imageregistry.operator.openshift.io/cluster
-Change from
- managementState: Removed 
- to be
- managementState: Managed 
-Set up NFS server in Bastion node
-Config NFS service
-systemctl enable rpcbind
-systemctl enable nfs-server
-systemctl start rpcbind
-systemctl start nfs-server
-firewall-cmd --zone=public --add-port=111/tcp --permanent
-firewall-cmd --zone=public --add-port=111/udp --permanent
-firewall-cmd --zone=public --add-port=2049/tcp --permanent
-firewall-cmd --zone=public --add-port=2049/udp --permanent
-firewall-cmd --zone=public --add-port=892/tcp --permanent
-firewall-cmd --zone=public --add-port=662/udp --permanent
-firewall-cmd --reload
-pvcreate /dev/sdc
-vgcreate nfs /dev/sdc
-lvcreate -L 199G -n lv_image_registry nfs
-mkfs.xfs -f -n ftype=1 -i size=512 -n size=8192 /dev/nfs/lv_image_registry
-Set up Image Registry with NFS Storage
-mkdir -p /opt/IBM/Cloud/OpenShift/PV/images
-vi /etc/fstab
-/dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images xfs defaults,noatime 1 2
-
-mount /dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images
-
-vi /etc/exports
-# For IBM RedHat OpenShift private image registry
-/opt/IBM/Cloud/OpenShift/PV/images *(rw,sync,no_wdelay,no_root_squash,insecure,fsid=0)
-Check  if configuration succeeds.
-exportfs -rav
-Create Storage Class  image-registry-sc
-Follow this guide Dynamic nfs provision for creating the storage class image-registry-sc.
 
 
-Create PVC
-vi image-registry-pvc.yaml
 
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-    name: image-registry-pvc
-    namespace: openshift-image-registry
-spec:
-    accessModes:
-        - ReadWriteMany
-    resources:
-        requests:
-            storage: 100Gi
-    storageClassName: image-registry-sc
 
-You can use this template directly.
-
-oc apply -f image-registry-pvc.yaml
-
-Edit imageregistry operator
-oc edit configs.imageregistry.operator.openshift.io
-change  as follows:
-  managementState: Managed
-  ...............
-    write:
-      maxInQueue: 0
-      maxRunning: 0
-      maxWaitInQueue: 0s
-  storage:
-      pvc:
-          claim: image-registry-pvc
-
-Approve the CSR
-oc get csr -o name | xargs oc adm certificate approve
-
-Check if the image-registry pod restarted successfully
-oc get pod -n openshift-image-registry
-oc rsh image-registry-xxx-xxx 
-df -h | grep registry
-mount | grep registry 
 
 Complete installation
 Confirm that all the cluster components are online
@@ -644,12 +567,3 @@ INFO To access the cluster as the system:admin user when using 'oc', run 'export
 INFO Access the OpenShift web-console here: https://console-openshift-console.apps.coc-g1.xxx.xxx.com
 INFO Login to the console with user: "kubeadmin", and password: "F55t5-XeSoj-ospVr-BZTuV"
 INFO Time elapsed: 0s
-Expose and assess Image registry
-oc policy add-role-to-user registry-viewer kubeadmin
-oc policy add-role-to-user registry-editor kubeadmin
-oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
-HOST=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
-podman login -u kubeadmin -p $(oc whoami -t) --tls-verify=false $HOST
- [ Also see: https://docs.openshift.com/container-platform/4.3/registry/securing-exposing-registry.html on exposing the registry ]
-Verify with OpenShift Client log in
-oc login https://api.coc-g1.xxx.xxx.com:6443 -u kubeadmin -p F55t5-XeSoj-ospVr-BZTuV
