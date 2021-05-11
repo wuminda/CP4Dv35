@@ -550,7 +550,7 @@ watch -n5 oc get clusteroperators
 
 安装最后执行 openshift-install --dir=/ocpinstall wait-for install-complete --log-level=debug
 Configure image registry
-oc describe configs.imageregistry.operator.openshift.io 
+oc describe configs.imageregistry.operator.openshift.io/cluster 
 oc edit configs.imageregistry.operator.openshift.io/cluster
 Change from
  managementState: Removed 
