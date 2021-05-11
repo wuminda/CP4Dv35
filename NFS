@@ -1,6 +1,7 @@
 $ oc project default
 $ export PROJECT=$(oc project -q)
-$ export REGISTRY=$(oc registry info)
+# export REGISTRY=$(oc registry info)
+export REGISTRY="coc-g1-bastion.coc-g1.xxx.xxx.com:5000"
 $ podman load -i /ibm/nfs-client-provisioner.tar
 
 $ podman tag quay.io/external_storage/nfs-client-provisioner:latest $REGISTRY/$PROJECT/nfs-client-provisioner:latest
