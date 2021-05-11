@@ -5,7 +5,8 @@ export REGISTRY="coc-g1-bastion.coc-g1.xxx.xxx.com:5000"
 $ podman load -i /ibm/nfs-client-provisioner.tar
 
 $ podman tag quay.io/external_storage/nfs-client-provisioner:latest $REGISTRY/$PROJECT/nfs-client-provisioner:latest
-$ podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
+# podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
+podman login $REGISTRY -u admin -p passw0rd
 $ podman push $REGISTRY/$PROJECT/nfs-client-provisioner:latest
 
 $ sed -i '' "s/image:.*/image:REGISTRY/PROJECT/nfs-client-provisioner:latest/g" /nfs-subdir-external-provisioner-master/deploy/deployment.yaml
