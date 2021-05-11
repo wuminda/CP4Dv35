@@ -1,94 +1,72 @@
-$ oc project default
-$ export PROJECT=$(oc project -q)
-# export REGISTRY=$(oc registry info)
-export REGISTRY="coc-g1-bastion.coc-g1.xxx.xxx.com:5000"
-$ podman load -i /ibm/nfs-client-provisioner.tar
+systemctl enable rpcbind
+systemctl enable nfs-server
+systemctl start rpcbind
+systemctl start nfs-server
+service nfs start
+systemctl enable nfs
+firewall-cmd --zone=public --add-port=111/tcp --permanent
+firewall-cmd --zone=public --add-port=111/udp --permanent
+firewall-cmd --zone=public --add-port=2049/tcp --permanent
+firewall-cmd --zone=public --add-port=2049/udp --permanent
+firewall-cmd --zone=public --add-port=892/tcp --permanent
+firewall-cmd --zone=public --add-port=662/udp --permanent
+firewall-cmd --reload
+pvcreate /dev/sdc
+vgcreate nfs /dev/sdc
+lvcreate -L 199G -n lv_image_registry nfs
+mkfs.xfs -f -n ftype=1 -i size=512 -n size=8192 /dev/nfs/lv_image_registry
+Set up Image Registry with NFS Storage
+mkdir -p /opt/IBM/Cloud/OpenShift/PV/images
+vi /etc/fstab
+/dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images xfs defaults,noatime 1 2
 
-$ podman tag quay.io/external_storage/nfs-client-provisioner:latest $REGISTRY/$PROJECT/nfs-client-provisioner:latest
-# podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
+mount /dev/nfs/lv_image_registry /opt/IBM/Cloud/OpenShift/PV/images
+
+vi /etc/exports
+# For IBM RedHat OpenShift private image registry
+/opt/IBM/Cloud/OpenShift/PV/images *(rw,sync,no_wdelay,no_root_squash,insecure,fsid=0)
+Check  if configuration succeeds.
+exportfs -rav
+Create Storage Class  image-registry-sc
+Follow this guide Dynamic nfs provision for creating the storage class image-registry-sc.
+
+Client Test: mount -t nfs 192.168.15.103:/home/nfs /nfs
+
+oc project default
+export PROJECT=$(oc project -q)
+export NAMESPACE=$(oc project -q)
+export REGISTRY="coc-g1-bastion.coc-g1.xxx.xxx.com:5000"
+podman load -i /ibm/nfs-client-provisioner.tar
+
+podman tag quay.io/external_storage/nfs-client-provisioner:latest $REGISTRY/$PROJECT/nfs-client-provisioner:latest
 podman login $REGISTRY -u admin -p passw0rd
-$ podman push $REGISTRY/$PROJECT/nfs-client-provisioner:latest
+podman push $REGISTRY/$PROJECT/nfs-client-provisioner:latest
 
 $ sed -i '' "s/image:.*/image:REGISTRY/PROJECT/nfs-client-provisioner:latest/g" /nfs-subdir-external-provisioner-master/deploy/deployment.yaml
 
-$ podman load -i /ibm/busybox.tar
-
-$ podman tag gcr.io/google_containers/busybox:1.24 \
-$ $REGISTRY/$PROJECT/busybox:1.24
-
-$ podman login $REGISTRY -u kubeadmin -p $(oc whoami -t) --tls-verify=false
-$ podman push $REGISTRY/$PROJECT/busybox:1.24
-
-$ sed -i '' "s/image:.*/image:REGISTRY/PROJECT/busybox:1.24/g" /nfs-subdir-external-provisioner-master/deploy/test-pod.yaml
-
-$ NAMESPACE=`oc project -q`
 $ sed -i '' "s/namespace:.*/namespace:NAMESPACE/g" /nfs-subdir-external-provisioner-master/deploy/rbac.yaml
 
 $ oc create -f deploy/rbac.yaml
-$ oc adm policy add-scc-to-user hostmount-anyuid 
+$ oc create role use-scc-hostmount-anyuid --verb=use --resource=scc --resource-name=hostmount-anyuid -n $NAMESPACE
+$ oc adm policy add-role-to-user use-scc-hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner
+
+$ oc create secret docker-registry <pull_secret_name> \
+    --docker-server=coc-g1-bastion.coc-g1.xxx.xxx.com:5000 \
+    --docker-username=admin \
+    --docker-password=passw0rd \
 
 Edit deploy/deployment.yaml
-Edit deploy/class.yaml file
+
+<YOUR NFS SERVER HOSTNAME>
+<YOUR NFS PATH>
+
+Edit deploy/class.yaml file <保留 PROVISIONER_NAME 的话不需要改>
 
 $ oc create -f deploy/class.yaml
 $ oc create -f deploy/deployment.yaml
-$ oc create -f deploy/test-claim.yaml
-$ cat test-claim.yaml 
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
- name: test-claim
- annotations:
- volume.beta.kubernetes.io/storage-class: “managed-nfs-storage”
-spec:
- accessModes:
- — ReadWriteMany
- resources:
- requests:
- storage: 1Mi
 
 
-$ oc get pvc
-$ oc create -f test-pod.yaml 
-
-
-
-$ vi image-registry-sc.yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: image-registry-sc
-spec:
-  accessModes:
-  - ReadWriteMany
-  capacity:
-    storage: 200Gi
-  nfs:
-    path: /opt/IBM/Cloud/OpenShift/PV/images
-    server: 9.123.120.109
-  persistentVolumeReclaimPolicy: Retain
-
-$ oc apply -f image-registry-sc.yaml
-
-$ oc get pv
-$ vi image-registry-pv.yaml
-piVersion: v1
-kind: PersistentVolume
-metadata:
-  name: image-registry-sc1
-spec:
-  accessModes:
-  - ReadWriteMany
-  capacity:
-    storage: 200Gi
-  nfs:
-    path: /xxx
-    server: 9.123.xxx.xxx
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: image-registry-sc
-  
-  
-$ oc apply -f image-registry-pv.yaml
+$ oc apply -f image-registry-pvc.yaml
 
 
 $ oc edit configs.imageregistry.operator.openshift.io
@@ -99,3 +77,23 @@ spec:
   storage:
     pvc:
       claim: image-registry-pvc
+      
+      
+Approve the CSR
+oc get csr -o name | xargs oc adm certificate approve
+
+Check if the image-registry pod restarted successfully
+oc get pod -n openshift-image-registry
+oc rsh image-registry-xxx-xxx 
+df -h | grep registry
+mount | grep registry       
+
+
+Expose and assess Image registry：
+
+oc policy add-role-to-user registry-viewer kubeadmin
+oc policy add-role-to-user registry-editor kubeadmin
+oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
+oc login https://api.coc-g1.xxx.xxx.com:6443 -u kubeadmin -p F55t5-XeSoj-ospVr-BZTuV 
+export HOST=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
+podman login -u kubeadmin -p $(oc whoami -t) --tls-verify=false $HOST
