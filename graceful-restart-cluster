@@ -17,14 +17,19 @@ Drain all of your worker nodes
 oc adm drain <node> --ignore-daemonsets --force --grace-period=30 --delete-local-data
 This forces pods to stop, ignores any daemonsets that are running on the nodes, enforces a graceful termination period of 30s for pods to stop gracefully and removes any pods with local ephemeral data.
 
+登陆到bastion,ssh core@$node 这里$node换成对应ip
 
+按顺序一台一台关，先workers 后master
 Gracefully shut down all the workers first (shutdown –h now,)
-Gracefully shutdown all the infra nodes (shutdown –h now)
-Gracefully shutdown etcd nodes one by one
+如果没有，可忽略 Gracefully shutdown all the infra nodes (shutdown –h now)
+如果没有，可忽略 Gracefully shutdown etcd nodes one by one
 Gracefully shutdown all the masters (shutdown –h now)
 
+如果需要接着关 lb，nfs 和bastion，关机都要shutdown –h now
 
+启动的时候反过来，先启动lb，nfs,bastion
+先启动master，等master服务都起来后，可以等五分钟，再启动 worker
 Start Masters and wait for them to be ready (oc get nodes)
-Stat etcd
-Start Infra nodes and wait for them to be ready (oc get nodes)
+如果没有，可忽略 Stat etcd
+如果没有，可忽略 Start Infra nodes and wait for them to be ready (oc get nodes)
 Start the worker nodes
