@@ -20,10 +20,10 @@ This forces pods to stop, ignores any daemonsets that are running on the nodes, 
 登陆到bastion,ssh core@$node 这里$node换成对应ip
 
 按顺序一台一台关，先workers 后master
-Gracefully shut down all the workers first (shutdown –h now,)
-如果没有，可忽略 Gracefully shutdown all the infra nodes (shutdown –h now)
+Gracefully shut down all the workers first (sudo shutdown –h now,)
+如果没有，可忽略 Gracefully shutdown all the infra nodes (sudo shutdown –h now)
 如果没有，可忽略 Gracefully shutdown etcd nodes one by one
-Gracefully shutdown all the masters (shutdown –h now)
+Gracefully shutdown all the masters (sudo shutdown –h now)
 
 如果需要接着关 lb，nfs 和bastion，关机都要shutdown –h now
 
