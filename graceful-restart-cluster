@@ -44,6 +44,7 @@ systemctl status chronyd
 systemctl status firewalld
 
 除了firewalld是disable以外，其他都是启动的
+exportfs -rav
 
 登录到 Bastion 节点
 export KUBECONFIG=/ibm/installation_directory/auth/kubeconfig
