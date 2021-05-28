@@ -54,9 +54,15 @@ oc get nodes --show-labels
 oc get pods --all-namespaces | grep –Ev ‘1/1|2/2|3/3|4/4’ | grep –v ‘completed’
 
 
-NFS pod需要image
+NFS pod需要image，检查
+curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/default/nfs-client-provisioner:latest
 curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/default/nfs-client-provisioner:latest
 
+必要的话，可以执行以下步骤：
 podman load -i /ocp4_downloads/registry/images/registry2.tar
 podman run --name mirror-registry --publish $REGISTRY_PORT:5000 --detach --volume /ocp4_downloads/registry/data:/var/lib/registry:z --volume /ocp4_downloads/registry/auth:/auth:z --volume /ocp4_downloads/registry/certs:/certs:z --env "REGISTRY_AUTH=htpasswd" --env "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" --env REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt --env REGISTRY_HTTP_TLS_KEY=/certs/registry.key docker.io/library/registry:2
-Add certificate to trusted store on the new registry server
+
+podman load -i /ibm/nfs-client-provisioner.tar
+podman tag quay.io/external_storage/nfs-client-provisioner:latest $LOCAL_REGISTRY/default/nfs-client-provisioner:latest
+podman login $LOCAL_REGISTRY -u admin -p passw0rd
+podman push $LOCAL_REGISTRY/default/nfs-client-provisioner:latest
