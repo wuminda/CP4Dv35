@@ -33,3 +33,20 @@ Start Masters and wait for them to be ready (oc get nodes)
 如果没有，可忽略 Stat etcd
 如果没有，可忽略 Start Infra nodes and wait for them to be ready (oc get nodes)
 Start the worker nodes
+
+
+登录到 NFS/LB 节点
+systemctl status nfs-server
+systemctl status rpcbind
+systemctl status named-chroot
+systemctl status haproxy
+systemctl status chronyd
+systemctl status firewalld
+
+除了firewalld是disable以外，其他都是启动的
+
+登录到 Bastion 节点
+export KUBECONFIG=/ibm/installation_directory/auth/kubeconfig
+oc login https://xxx.com:6443 -u xxx -p xxx
+oc whoami
+oc get nodes --show-labels
