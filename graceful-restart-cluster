@@ -55,8 +55,9 @@ oc get pods --all-namespaces | grep –Ev ‘1/1|2/2|3/3|4/4’ | grep –v ‘c
 
 
 NFS pod需要image，检查
-curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/default/nfs-client-provisioner:latest
-curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/default/nfs-client-provisioner:latest
+curl -u $REGISTRY_USER:$REGISTRY_PASSWORD https://${LOCAL_REGISTRY}/v2/_catalog
+
+${LOCAL_REGISTRY}/default/nfs-client-provisioner:latest
 
 必要的话，可以执行以下步骤：
 podman load -i /ocp4_downloads/registry/images/registry2.tar
