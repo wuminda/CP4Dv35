@@ -50,3 +50,4 @@ export KUBECONFIG=/ibm/installation_directory/auth/kubeconfig
 oc login https://xxx.com:6443 -u xxx -p xxx
 oc whoami
 oc get nodes --show-labels
+oc get pods –all-namespaces | grep –Ev ‘1/1|2/2|3/3|4/4’ | grep –v ‘completed’
